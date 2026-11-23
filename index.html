@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel web ESP32 Bluetooth</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(145deg,#101d34,#070c16);font-family:Arial,Helvetica,sans-serif;color:#edf4ff}
+main{width:min(440px,100%);padding:24px;border:1px solid #30435d;border-radius:24px;background:#111d30;box-shadow:0 18px 60px #0006}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:20px;margin:0}.tag{font-size:12px;border:1px solid #3c526e;border-radius:30px;padding:8px 10px;color:#c4d5eb}
+.visual{margin:24px 0;padding:25px 15px;text-align:center;border:1px solid #2b405c;border-radius:18px;background:#17263b}
+.circle{width:110px;height:110px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;background:#183b5d;border:7px solid #2a5c89;box-shadow:0 0 28px #299bff24;transition:.2s}
+.circle svg{width:46px;height:46px}.state{font-weight:800;font-size:25px;letter-spacing:1px}.sub{font-size:13px;color:#a7bad2;line-height:1.5}
+body.is-active .circle{background:#49351d;border-color:#d98b39;box-shadow:0 0 30px #ffad422b}body.is-active .state{color:#ffbd68}
+button{width:100%;padding:14px;border:0;border-radius:12px;background:#50b1ff;color:#071322;font-weight:bold;font-size:16px;cursor:pointer}button:disabled{opacity:.65;cursor:default}
+.details{display:flex;justify-content:space-between;gap:12px;margin-top:15px;font-size:13px;color:#b5c6db}.log{margin-top:18px;background:#0a1424;border:1px solid #263952;border-radius:10px;padding:12px;font-size:13px;color:#b5c6db;overflow-wrap:anywhere}
+footer{font-size:12px;line-height:1.5;color:#8fa5c0;margin-top:15px}
+</style>
+</head>
+<body>
+<main>
+<header><h1>ESP32 · Panel web</h1><span class="tag" id="connection">Sin conectar</span></header>
+<section class="visual" aria-live="polite">
+<div class="circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v8m-4-4a6 6 0 1 0 8 0M5 18h14"/></svg></div>
+<div class="state" id="status">EN ESPERA</div>
+<p class="sub">Estado del microinterruptor conectado al ESP32</p>
+</section>
+<button id="connect">Conectar por Bluetooth</button>
+<div class="details"><span>Entrada</span><strong>GPIO 18</strong></div>
+<div class="details"><span>Comunicación</span><strong>Bluetooth BLE · sin Wi-Fi</strong></div>
+<div class="log" id="message">Pulsa conectar y selecciona “ESP32_SIMULADOR”.</div>
+<footer>Este sitio web no se instala como aplicación. La conexión Bluetooth requiere un navegador compatible y que la página esté abierta mediante HTTPS o localhost.</footer>
+</main>
+<script>
+const SERVICE_UUID='4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const CHARACTERISTIC_UUID='beb5483e-36e1-4688-b7f5-ea07361b26a8';
+const btn=document.getElementById('connect'),connection=document.getElementById('connection'),status=document.getElementById('status'),message=document.getElementById('message');
+function showStatus(value){
+ const active=value.trim().toUpperCase()==='ACTIVADO';
+ document.body.classList.toggle('is-active',active);
+ status.textContent=active?'BOTÓN PRESIONADO':'EN ESPERA';
+ message.textContent='Señal Bluetooth recibida: '+value.trim();
+}
+btn.addEventListener('click',async()=>{
+ if(!navigator.bluetooth){message.textContent='Este navegador no admite Web Bluetooth. Prueba Chrome o Edge compatible, desde GitHub Pages (HTTPS).';return;}
+ try{
+  btn.disabled=true;message.textContent='Buscando ESP32 por Bluetooth…';
+  const device=await navigator.bluetooth.requestDevice({filters:[{name:'ESP32_SIMULADOR'}],optionalServices:[SERVICE_UUID]});
+  device.addEventListener('gattserverdisconnected',()=>{connection.textContent='Desconectado';btn.disabled=false;btn.textContent='Conectar por Bluetooth';message.textContent='El ESP32 se desconectó.'});
+  const server=await device.gatt.connect();
+  const service=await server.getPrimaryService(SERVICE_UUID);
+  const characteristic=await service.getCharacteristic(CHARACTERISTIC_UUID);
+  await characteristic.startNotifications();
+  characteristic.addEventListener('characteristicvaluechanged',e=>showStatus(new TextDecoder().decode(e.target.value)));
+  connection.textContent='Bluetooth conectado';btn.textContent='Conectado';message.textContent='Conexión establecida. Esperando el estado del botón…';
+ }catch(error){message.textContent='Conexión cancelada o fallida: '+error.message;btn.disabled=false;}
+});
+</script>
+</body>
+</html>
